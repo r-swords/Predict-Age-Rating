@@ -26,6 +26,8 @@ ia = Cinemagoer()
 top = ia.get_top250_movies()
 pop = ia.get_popular100_movies()
 bot = ia.get_bottom100_movies()
+with open('additional_movies.txt', 'rb') as f:
+    additional_movies = f.read().splitlines()
 count = 0
 with open('dataset.tsv', 'a', encoding='utf-8') as f:
     w = csv.writer(f, delimiter='\t')
@@ -85,6 +87,35 @@ for i in bot:
         if rating is None:
             continue
         rating = rating.split()[1]
+        nudity_count, nudity_content = get_with_spoiler(i, 'advisory nudity')
+        violence_count, violence_content = get_with_spoiler(i, 'advisory violence')
+        alcohol_count, alcohol_content = get_without_spoiler(i, 'advisory alcohol')
+        frightening_count, frightening_content = get_with_spoiler(i, 'advisory frightening')
+        profanity_count, profanity_content = get_without_spoiler(i, 'advisory profanity')
+        with open('dataset.tsv', 'a', encoding='utf-8') as f:
+            w = csv.writer(f, delimiter='\t')
+            w.writerow([title, rating, nudity_count, violence_count, alcohol_count, frightening_count, profanity_count,
+                        nudity_content + ' ' + violence_content + ' ' + alcohol_content + ' ' + frightening_content + ' ' + profanity_content])
+
+count = 0
+for movie in additional_movies:
+    i = ia.get_movie(movie[2:])
+    print(count)
+    count += 1
+    ia.update(i, info=['parents guide'])
+    title = i['title']
+    if title not in movie_set:
+        rating = i.get('mpaa')
+        if rating is None:
+            g_rated = False
+            for j in i.get('certificates'):
+                if j['full'] == 'United States:G':
+                    rating = 'G'
+                    g_rated = True
+            if not g_rated:
+                continue
+        else:
+            rating = rating.split()[1]
         nudity_count, nudity_content = get_with_spoiler(i, 'advisory nudity')
         violence_count, violence_content = get_with_spoiler(i, 'advisory violence')
         alcohol_count, alcohol_content = get_without_spoiler(i, 'advisory alcohol')
