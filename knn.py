@@ -9,6 +9,7 @@ import matplotlib.pyplot as plt
 import nltk
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import confusion_matrix, classification_report
+from sklearn.preprocessing import StandardScaler
 
 
 def cv_plot(cv_range, mean_error, std_error, hyper_param):
@@ -23,15 +24,15 @@ def min_df_cv(min_df_val):
 
 
 def max_df_cv(max_df_val):
-    return TfidfVectorizer(stop_words=nltk.corpus.stopwords.words('english'), min_df=0.01, max_df=max_df_val)
+    return TfidfVectorizer(stop_words=nltk.corpus.stopwords.words('english'), min_df=0.1, max_df=max_df_val)
 
 
 def ngram_cv(ngram_val):
-    return TfidfVectorizer(stop_words=nltk.corpus.stopwords.words('english'), min_df=0.01, max_df=100,
+    return TfidfVectorizer(stop_words=nltk.corpus.stopwords.words('english'), min_df=0.1, max_df=500,
                            ngram_range=(1, ngram_val))
 
 
-def vectoriser_cv(hyper_param, text, cv_range):
+def vectoriser_cv(hyper_param, text, cv_range, votes):
     if hyper_param == "min df":
         get_vectoriser = min_df_cv
     elif hyper_param == "max df":
@@ -43,20 +44,25 @@ def vectoriser_cv(hyper_param, text, cv_range):
     for i in cv_range:
         vectoriser = get_vectoriser(i)
         X = vectoriser.fit_transform(text)
+        X = pd.concat([pd.DataFrame(X.toarray()), votes], axis=1)
+        scale = StandardScaler(with_mean=False)
+        scale.fit_transform(X)
         model = KNeighborsClassifier(n_neighbors=25)
         # conduct cross validation
-        scores = cross_val_score(model, X, y, cv=5, scoring='f1_weighted')
+        scores = cross_val_score(model, X, y, cv=5, scoring='f1_macro')
         # record results
         mean_error.append(np.array(scores).mean())
         std_error.append(np.array(scores).std())
     cv_plot(cv_range, mean_error, std_error, hyper_param)
 
 
-def k_cv(text):
-    vectorizer = TfidfVectorizer(stop_words=nltk.corpus.stopwords.words('english'), min_df=0.01, max_df=100,
-                                 ngram_range=(1, 4))
+def k_cv(text, votes):
+    vectorizer = TfidfVectorizer(stop_words=nltk.corpus.stopwords.words('english'), min_df=0.1, max_df=500,
+                                 ngram_range=(1, 1))
     X = vectorizer.fit_transform(text)
-
+    X = pd.concat([pd.DataFrame(X.toarray()), votes], axis=1)
+    scale = StandardScaler(with_mean=False)
+    scale.fit_transform(X)
     n_neighbours = []
     mean_error = []
     std_error = []
@@ -65,7 +71,7 @@ def k_cv(text):
         # intialise model
         model = KNeighborsClassifier(n_neighbors=k)
         # conduct cross validation
-        scores = cross_val_score(model, X, y, cv=5, scoring='f1_weighted')
+        scores = cross_val_score(model, X, y, cv=5, scoring='f1_macro')
         # record results
         mean_error.append(np.array(scores).mean())
         std_error.append(np.array(scores).std())
@@ -74,27 +80,30 @@ def k_cv(text):
 
 
 df = pd.read_csv("dataset.tsv", sep="\t")
-text = df.iloc[:, -1]
-others = df.iloc[:, 2:7]
-y = df.iloc[:, 1]
+text = df.content
+others = df.iloc[:, 2:22]
+y = df.rating
 
-vectoriser_cv('min df', text, [0.0001, 0.001, 0.01, 0.1, 1])
-vectoriser_cv('max df', text, [10, 50, 100, 200, 400])
-vectoriser_cv('ngram', text, [1, 2, 3, 4, 5, 6, 7, 8, 9])
-k_cv(text)
+vectoriser_cv('min df', text, [0.0001, 0.001, 0.01, 0.1, 1], others)
+vectoriser_cv('max df', text, [50, 100, 500, 1000], others)
+vectoriser_cv('ngram', text, [1, 2, 3, 4, 5, 6, 7, 8, 9], others)
+k_cv(text, others)
 
-vectoriser = TfidfVectorizer(stop_words=nltk.corpus.stopwords.words('english'), min_df=0.01, max_df=100,
-                             ngram_range=(1, 4))
+vectoriser = TfidfVectorizer(stop_words=nltk.corpus.stopwords.words('english'), min_df=0.1, max_df=500,
+                             ngram_range=(1, 1))
 X = vectoriser.fit_transform(text)
+X = pd.concat([pd.DataFrame(X.toarray()), others], axis=1)
+scale = StandardScaler(with_mean=False)
+scale.fit_transform(X)
 xtrain, xtest, ytrain, ytest = train_test_split(X, y, test_size=0.2)
 
-kNN_model = KNeighborsClassifier(n_neighbors=25)
+kNN_model = KNeighborsClassifier(n_neighbors=5)
 kNN_model.fit(xtrain, ytrain)
 predictions = kNN_model.predict(xtest)
 print(classification_report(ytest, predictions))
 print(confusion_matrix(ytest, predictions))
 
-dummy = DummyClassifier(strategy='most_frequent')
+dummy = DummyClassifier(strategy='uniform')
 dummy.fit(xtrain, ytrain)
 predictions = dummy.predict(xtest)
 print(classification_report(ytest, predictions))

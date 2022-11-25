@@ -1,5 +1,23 @@
+from bs4 import BeautifulSoup
 from imdb import Cinemagoer
 import csv
+from urllib import request
+
+
+def get_parental_content(film_id):
+    id_types = ['advisory-nudity', 'advisory-violence', 'advisory-profanity', 'advisory-alcohol', 'advisory-frightening', 'advisory-spoiler-nudity', 'advisory-spoiler-violence', 'advisory-spoiler-profanity', 'advisory-spoiler-alcohol', 'advisory-spoiler-frightening']
+    request_url = request.urlopen('https://www.imdb.com/title/tt' + film_id + '/parentalguide?ref_=tt_stry_pg')
+    soup = BeautifulSoup(request_url.read())
+    votes_string = soup.find_all("span", class_="ipl-vote-button__details")
+    votes = list(map(lambda x: int(x.string.replace(',', '')), votes_string))
+    for i in range(0, len(votes), 4):
+        total = votes[i] + votes[i+1] + votes[i+2] + votes[i+3]
+        if total > 0:
+            votes[i] /= total
+            votes[i+1] /= total
+            votes[i+2] /= total
+            votes[i+3] /= total
+    return votes
 
 
 def get_with_spoiler(movie, type_of_guide):
@@ -9,18 +27,16 @@ def get_with_spoiler(movie, type_of_guide):
         normal = []
     if spoiler is None:
         spoiler = []
-    count = len(normal) + len(spoiler)
     combined = " ".join(normal + spoiler)
-    return count, combined
+    return combined
 
 
 def get_without_spoiler(movie, type_of_guide):
     normal = movie.get(type_of_guide)
     if normal is None:
         normal = []
-    count = len(normal)
     combined = " ".join(normal)
-    return count, combined
+    return combined
 
 ia = Cinemagoer()
 top = ia.get_top250_movies()
@@ -32,9 +48,13 @@ count = 0
 with open('dataset.tsv', 'a', encoding='utf-8') as f:
     w = csv.writer(f, delimiter='\t')
     w.writerow(
-        ['title', 'rating', 'nudity_count', 'violence_count', 'alcohol_count', 'frightening_count', 'profanity_count',
-         'content'])
+        ['title','rating', 'nudity_none', 'nudity_mild', 'nudity_moderate', 'nudity_severe', 'violence_none', 'violence_mild',
+         'violence_moderate', 'violence_severe', 'profanity_none', 'profanity_mild', 'profanity_moderate',
+         'profanity_severe', 'alcohol_none', 'alcohol_mild', 'alcohol_moderate', 'alcohol_severe', 'frightning_none',
+         'frightning_mild', 'frightning_moderate', 'frightning_severe', 'content'])
+
 movie_set = set()
+
 for i in top:
     print(count)
     count += 1
@@ -45,15 +65,18 @@ for i in top:
     if rating is None:
         continue
     rating = rating.split()[1]
-    nudity_count, nudity_content = get_with_spoiler(i, 'advisory nudity')
-    violence_count, violence_content = get_with_spoiler(i, 'advisory violence')
-    alcohol_count, alcohol_content = get_without_spoiler(i, 'advisory alcohol')
-    frightening_count, frightening_content = get_with_spoiler(i, 'advisory frightening')
-    profanity_count, profanity_content = get_without_spoiler(i, 'advisory profanity')
+    nudity_content = get_with_spoiler(i, 'advisory nudity')
+    violence_content = get_with_spoiler(i, 'advisory violence')
+    alcohol_content = get_without_spoiler(i, 'advisory alcohol')
+    frightening_content = get_with_spoiler(i, 'advisory frightening')
+    profanity_content = get_without_spoiler(i, 'advisory profanity')
+    votes = get_parental_content(i.movieID)
     with open('dataset.tsv', 'a', encoding='utf-8') as f:
         w = csv.writer(f, delimiter='\t')
-        w.writerow([title, rating, nudity_count, violence_count, alcohol_count, frightening_count, profanity_count,
-                    nudity_content + ' ' + violence_content + ' ' + alcohol_content + ' ' + frightening_content + ' ' + profanity_content])
+        w.writerow(
+            [title, rating, votes[0], votes[1], votes[2], votes[3], votes[4], votes[5], votes[6], votes[7], votes[8], votes[9],
+             votes[10], votes[11], votes[12], votes[13], votes[14], votes[15], votes[16], votes[17], votes[18],
+             votes[19], nudity_content + ' ' + violence_content + ' ' + alcohol_content + ' ' + frightening_content + ' ' + profanity_content])
 
 count = 0
 for i in pop:
@@ -66,15 +89,23 @@ for i in pop:
         if rating is None:
             continue
         rating = rating.split()[1]
-        nudity_count, nudity_content = get_with_spoiler(i, 'advisory nudity')
-        violence_count, violence_content = get_with_spoiler(i, 'advisory violence')
-        alcohol_count, alcohol_content = get_without_spoiler(i, 'advisory alcohol')
-        frightening_count, frightening_content = get_with_spoiler(i, 'advisory frightening')
-        profanity_count, profanity_content = get_without_spoiler(i, 'advisory profanity')
-        with open('dataset.tsv', 'a', encoding='utf-8') as f:
-            w = csv.writer(f, delimiter='\t')
-            w.writerow([title, rating, nudity_count, violence_count, alcohol_count, frightening_count, profanity_count,
-                        nudity_content + ' ' + violence_content + ' ' + alcohol_content + ' ' + frightening_content + ' ' + profanity_content])
+        nudity_content = get_with_spoiler(i, 'advisory nudity')
+        violence_content = get_with_spoiler(i, 'advisory violence')
+        alcohol_content = get_without_spoiler(i, 'advisory alcohol')
+        frightening_content = get_with_spoiler(i, 'advisory frightening')
+        profanity_content = get_without_spoiler(i, 'advisory profanity')
+        votes = get_parental_content(i.movieID)
+        try:
+            with open('dataset.tsv', 'a', encoding='utf-8') as f:
+                w = csv.writer(f, delimiter='\t')
+                w.writerow(
+                    [title, rating, votes[0], votes[1], votes[2], votes[3], votes[4], votes[5], votes[6], votes[7], votes[8],
+                     votes[9], votes[10], votes[11], votes[12], votes[13], votes[14], votes[15], votes[16], votes[17],
+                     votes[18], votes[19], nudity_content + ' ' + violence_content + ' ' + alcohol_content + ' ' +
+                     frightening_content + ' ' + profanity_content])
+        except:
+            print(len(votes))
+            continue
 
 count = 0
 for i in bot:
@@ -87,15 +118,20 @@ for i in bot:
         if rating is None:
             continue
         rating = rating.split()[1]
-        nudity_count, nudity_content = get_with_spoiler(i, 'advisory nudity')
-        violence_count, violence_content = get_with_spoiler(i, 'advisory violence')
-        alcohol_count, alcohol_content = get_without_spoiler(i, 'advisory alcohol')
-        frightening_count, frightening_content = get_with_spoiler(i, 'advisory frightening')
-        profanity_count, profanity_content = get_without_spoiler(i, 'advisory profanity')
+        nudity_content = get_with_spoiler(i, 'advisory nudity')
+        violence_content = get_with_spoiler(i, 'advisory violence')
+        alcohol_content = get_without_spoiler(i, 'advisory alcohol')
+        frightening_content = get_with_spoiler(i, 'advisory frightening')
+        profanity_content = get_without_spoiler(i, 'advisory profanity')
+        votes = get_parental_content(i.movieID)
         with open('dataset.tsv', 'a', encoding='utf-8') as f:
             w = csv.writer(f, delimiter='\t')
-            w.writerow([title, rating, nudity_count, violence_count, alcohol_count, frightening_count, profanity_count,
-                        nudity_content + ' ' + violence_content + ' ' + alcohol_content + ' ' + frightening_content + ' ' + profanity_content])
+            w.writerow(
+                [title, rating, votes[0], votes[1], votes[2], votes[3], votes[4], votes[5], votes[6], votes[7], votes[8],
+                 votes[9],
+                 votes[10], votes[11], votes[12], votes[13], votes[14], votes[15], votes[16], votes[17], votes[18],
+                 votes[19],
+                 nudity_content + ' ' + violence_content + ' ' + alcohol_content + ' ' + frightening_content + ' ' + profanity_content])
 
 count = 0
 for movie in additional_movies:
@@ -116,13 +152,18 @@ for movie in additional_movies:
                 continue
         else:
             rating = rating.split()[1]
-        nudity_count, nudity_content = get_with_spoiler(i, 'advisory nudity')
-        violence_count, violence_content = get_with_spoiler(i, 'advisory violence')
-        alcohol_count, alcohol_content = get_without_spoiler(i, 'advisory alcohol')
-        frightening_count, frightening_content = get_with_spoiler(i, 'advisory frightening')
-        profanity_count, profanity_content = get_without_spoiler(i, 'advisory profanity')
+        nudity_content = get_with_spoiler(i, 'advisory nudity')
+        violence_content = get_with_spoiler(i, 'advisory violence')
+        alcohol_content = get_without_spoiler(i, 'advisory alcohol')
+        frightening_content = get_with_spoiler(i, 'advisory frightening')
+        profanity_content = get_without_spoiler(i, 'advisory profanity')
+        votes = get_parental_content(i.movieID)
         with open('dataset.tsv', 'a', encoding='utf-8') as f:
             w = csv.writer(f, delimiter='\t')
-            w.writerow([title, rating, nudity_count, violence_count, alcohol_count, frightening_count, profanity_count,
-                        nudity_content + ' ' + violence_content + ' ' + alcohol_content + ' ' + frightening_content + ' ' + profanity_content])
+            w.writerow(
+                [title, rating, votes[0], votes[1], votes[2], votes[3], votes[4], votes[5], votes[6], votes[7], votes[8],
+                 votes[9],
+                 votes[10], votes[11], votes[12], votes[13], votes[14], votes[15], votes[16], votes[17], votes[18],
+                 votes[19],
+                 nudity_content + ' ' + violence_content + ' ' + alcohol_content + ' ' + frightening_content + ' ' + profanity_content])
 
