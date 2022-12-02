@@ -133,16 +133,16 @@ others = df.iloc[:, 2:22]
 print(others)
 y = df.rating
 
-#vectoriser_cv('min df', text, [1, 5, 10, 20, 30, 40, 50], others)
-#vectoriser_cv('max df', text, [50, 100, 200, 300, 400, 500, 1000, 1500, 2000], others)
-#vectoriser_cv('ngram', text, [1, 2, 3, 4, 5, 6, 7, 8, 9], others)
-#penalty_cv(text, others)
+vectoriser_cv('min df', text, [1, 5, 10, 20, 30, 40, 50], others)
+vectoriser_cv('max df', text, [50, 100, 200, 300, 400, 500, 1000, 1500, 2000], others)
+vectoriser_cv('ngram', text, [1, 2, 3, 4, 5, 6, 7, 8, 9], others)
+penalty_cv(text, others)
 
 combined_vectoriser = TfidfVectorizer(stop_words=nltk.corpus.stopwords.words('english'), min_df=50, max_df=300,
                              ngram_range=(1, 1))
-
 combined_X = combined_vectoriser.fit_transform(text)
 combined_X = pd.concat([pd.DataFrame(combined_X.toarray()), others], axis=1)
+
 text_vectoriser = TfidfVectorizer(stop_words=nltk.corpus.stopwords.words('english'), min_df=20, max_df=200,
                                  ngram_range=(1, 1))
 
