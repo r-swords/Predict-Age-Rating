@@ -14,13 +14,27 @@ plt.rcParams['figure.constrained_layout.use'] = True
 
 
 def multiclass_roc_curves(X, Y, classifier):
+
+    # for finding model coeficients
+    # model = classifier
+    # Xtrain, Xtest, Ytrain, Ytest = train_test_split(X, Y, test_size=0.3)
+    # model.fit(Xtrain, Ytrain)
+    # print(model.coef_)
+    # print(model.classes_)
+
     classes = ['G', 'PG', 'PG-13', 'R', 'NC-17']
     Y = label_binarize(Y, classes=classes)
     Xtr, Xte, Ytr, Yte = train_test_split(X, Y, test_size=0.3)
 
     clf = OneVsRestClassifier(classifier)
-    Ysc = np.array(clf.fit(Xtr, Ytr).predict_proba(Xte))
+    try:
+        # LinearSVC
+        Ysc = np.array(clf.fit(Xtr, Ytr).decision_function(Xte))
+    except:
+        # Dummy classifier
+        Ysc = np.array(clf.fit(Xtr, Ytr).predict_proba(Xte))
     N = len(classes)
+
 
     fpr, tpr = {}, {}
     for i in range(N):
@@ -60,7 +74,7 @@ def max_df_cv(max_df_val):
 
 
 def ngram_cv(ngram_val):
-    return TfidfVectorizer(stop_words=nltk.corpus.stopwords.words('english'), min_df=20, max_df=300,
+    return TfidfVectorizer(stop_words=nltk.corpus.stopwords.words('english'), min_df=20, max_df=200,
                            ngram_range=(1, ngram_val))
 
 
@@ -83,7 +97,7 @@ def vectoriser_cv(hyper_param, text, cv_range, votes):
 
         scale = StandardScaler(with_mean=False)
         scale.fit_transform(X)
-        model = SVC(C=1)
+        model = LinearSVC(C=1)
         # conduct cross validation
         scores = cross_val_score(model, X, y, cv=5, scoring='f1_macro')
         # record results
@@ -93,8 +107,8 @@ def vectoriser_cv(hyper_param, text, cv_range, votes):
 
 
 def penalty_cv(text, votes):
-    vectoriser = TfidfVectorizer(stop_words=nltk.corpus.stopwords.words('english'), min_df=20, max_df=300,
-                                 ngram_range=(1, 2))
+    vectoriser = TfidfVectorizer(stop_words=nltk.corpus.stopwords.words('english'), min_df=20, max_df=200,
+                                 ngram_range=(1, 1))
     X = vectoriser.fit_transform(text)
     #X = pd.concat([pd.DataFrame(), votes], axis=1)
     #X = pd.concat([pd.DataFrame(X.toarray()), votes], axis=1)
@@ -105,7 +119,7 @@ def penalty_cv(text, votes):
     std_error = []
 
     for c in c_range:
-        model = SVC(C=10)
+        model = LinearSVC(C = c)
         scores = cross_val_score(model, X, y, cv=5, scoring='f1_weighted')
         mean_error.append(np.array(scores).mean())
         std_error.append(np.array(scores).std())
@@ -116,29 +130,28 @@ def penalty_cv(text, votes):
 df = pd.read_csv("dataset.tsv", sep="\t")
 text = df.content.astype("U")
 others = df.iloc[:, 2:22]
+print(others)
 y = df.rating
-
-print(y)
 
 #vectoriser_cv('min df', text, [1, 5, 10, 20, 30, 40, 50], others)
 #vectoriser_cv('max df', text, [50, 100, 200, 300, 400, 500, 1000, 1500, 2000], others)
 #vectoriser_cv('ngram', text, [1, 2, 3, 4, 5, 6, 7, 8, 9], others)
 #penalty_cv(text, others)
 
-combined_vectoriser = TfidfVectorizer(stop_words=nltk.corpus.stopwords.words('english'), min_df=40, max_df=300,
+combined_vectoriser = TfidfVectorizer(stop_words=nltk.corpus.stopwords.words('english'), min_df=50, max_df=300,
                              ngram_range=(1, 1))
 
 combined_X = combined_vectoriser.fit_transform(text)
 combined_X = pd.concat([pd.DataFrame(combined_X.toarray()), others], axis=1)
-text_vectoriser = TfidfVectorizer(stop_words=nltk.corpus.stopwords.words('english'), min_df=20, max_df=300,
-                                 ngram_range=(1, 2))
+text_vectoriser = TfidfVectorizer(stop_words=nltk.corpus.stopwords.words('english'), min_df=20, max_df=200,
+                                 ngram_range=(1, 1))
 
 
 text_X = text_vectoriser.fit_transform(text)
 
-combined_SVM_model = SVC(C=10, probability=True)
-text_SVM_model = SVC(C=10, probability=True)
-votes_SVM_model = SVC(C=1, probability=True)
+combined_SVM_model = LinearSVC(C=1)
+text_SVM_model = LinearSVC(C=1)
+votes_SVM_model = LinearSVC(C=1)
 dummy = DummyClassifier(strategy='most_frequent')
 multiclass_roc_curves(combined_X, y, combined_SVM_model)
 combined_fpr, combined_tpr, combined_auc = multiclass_roc_curves(combined_X, y, combined_SVM_model)
