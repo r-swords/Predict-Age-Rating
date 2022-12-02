@@ -4,6 +4,26 @@ import csv
 from urllib import request
 
 
+possible_ratings = ['G', 'PG', 'PG-13', 'R', 'NC-17']
+
+
+def get_rating(film):
+    if film.get('certificates') is not None:
+        for j in film.get('certificates'):
+            if 'United States:G' in j['full']:
+                return 'G'
+            elif 'United States:PG' in j['full']:
+                return 'PG'
+            elif 'United States:PG-13' in j['full']:
+                return 'PG-13'
+            elif 'United States:R' in j['full']:
+                return 'R'
+            elif 'United States:NC-17' in j['full']:
+                return 'NC-17'
+    print(film['title'])
+    return None
+
+
 def get_parental_content(film_id):
     id_types = ['advisory-nudity', 'advisory-violence', 'advisory-profanity', 'advisory-alcohol', 'advisory-frightening', 'advisory-spoiler-nudity', 'advisory-spoiler-violence', 'advisory-spoiler-profanity', 'advisory-spoiler-alcohol', 'advisory-spoiler-frightening']
     request_url = request.urlopen('https://www.imdb.com/title/tt' + film_id + '/parentalguide?ref_=tt_stry_pg')
@@ -63,8 +83,13 @@ for i in top:
     movie_set.add(title)
     rating = i.get('mpaa')
     if rating is None:
+        rating = get_rating(i)
+        if rating is None:
+            continue
+    else:
+        rating = rating.split()[1]
+    if rating not in possible_ratings:
         continue
-    rating = rating.split()[1]
     nudity_content = get_with_spoiler(i, 'advisory nudity')
     violence_content = get_with_spoiler(i, 'advisory violence')
     alcohol_content = get_without_spoiler(i, 'advisory alcohol')
@@ -87,8 +112,13 @@ for i in pop:
     if title not in movie_set:
         rating = i.get('mpaa')
         if rating is None:
+            rating = get_rating(i)
+            if rating is None:
+                continue
+        else:
+            rating = rating.split()[1]
+        if rating not in possible_ratings:
             continue
-        rating = rating.split()[1]
         nudity_content = get_with_spoiler(i, 'advisory nudity')
         violence_content = get_with_spoiler(i, 'advisory violence')
         alcohol_content = get_without_spoiler(i, 'advisory alcohol')
@@ -116,8 +146,13 @@ for i in bot:
     if title not in movie_set:
         rating = i.get('mpaa')
         if rating is None:
+            rating = get_rating(i)
+            if rating is None:
+                continue
+        else:
+            rating = rating.split()[1]
+        if rating not in possible_ratings:
             continue
-        rating = rating.split()[1]
         nudity_content = get_with_spoiler(i, 'advisory nudity')
         violence_content = get_with_spoiler(i, 'advisory violence')
         alcohol_content = get_without_spoiler(i, 'advisory alcohol')
@@ -143,15 +178,13 @@ for movie in additional_movies:
     if title not in movie_set:
         rating = i.get('mpaa')
         if rating is None:
-            g_rated = False
-            for j in i.get('certificates'):
-                if j['full'] == 'United States:G':
-                    rating = 'G'
-                    g_rated = True
-            if not g_rated:
+            rating = get_rating(i)
+            if rating is None:
                 continue
         else:
             rating = rating.split()[1]
+        if rating not in possible_ratings:
+            continue
         nudity_content = get_with_spoiler(i, 'advisory nudity')
         violence_content = get_with_spoiler(i, 'advisory violence')
         alcohol_content = get_without_spoiler(i, 'advisory alcohol')
