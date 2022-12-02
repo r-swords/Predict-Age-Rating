@@ -1,16 +1,45 @@
-from sklearn.neighbors import KNeighborsClassifier
 import numpy as np
 import pandas as pd
+from sklearn.metrics import roc_curve, roc_auc_score
+from sklearn.multiclass import OneVsRestClassifier
+from sklearn.svm import LinearSVC, SVC
 from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.model_selection import cross_val_score
-from sklearn.metrics import get_scorer_names
+from sklearn.model_selection import cross_val_score, train_test_split
 from sklearn.dummy import DummyClassifier
 import matplotlib.pyplot as plt
 import nltk
-from sklearn.model_selection import train_test_split
-from sklearn.metrics import confusion_matrix, classification_report
-from sklearn.preprocessing import StandardScaler
-from sklearn.svm import LinearSVC
+from sklearn.preprocessing import StandardScaler, label_binarize
+
+plt.rcParams['figure.constrained_layout.use'] = True
+
+
+def multiclass_roc_curves(X, Y, classifier):
+    classes = ['G', 'PG', 'PG-13', 'R', 'NC-17']
+    Y = label_binarize(Y, classes=classes)
+    Xtr, Xte, Ytr, Yte = train_test_split(X, Y, test_size=0.3)
+
+    clf = OneVsRestClassifier(classifier)
+    Ysc = np.array(clf.fit(Xtr, Ytr).predict_proba(Xte))
+    N = len(classes)
+
+    fpr, tpr = {}, {}
+    for i in range(N):
+        fpr[i], tpr[i], _ = roc_curve(Yte[:, i], Ysc[:, i])
+    fpr['micro'], tpr['micro'], _ = roc_curve(Yte.ravel(), Ysc.ravel())
+    # First aggregate all false positive rates
+    all_fpr = np.unique(np.concatenate([fpr[i] for i in range(N)]))
+
+    # Then interpolate all ROC curves at this points
+    mean_tpr = np.zeros_like(all_fpr)
+    for i in range(N):
+        mean_tpr += np.interp(all_fpr, fpr[i], tpr[i])
+
+    # Finally average it and compute AUC
+    mean_tpr /= N
+
+    fpr["macro"] = all_fpr
+    tpr["macro"] = mean_tpr
+    return fpr['macro'], tpr['macro'], roc_auc_score(Yte, Ysc, average='macro', multi_class='ovr')
 
 
 def cv_plot(cv_range, mean_error, std_error, hyper_param, log):
@@ -23,15 +52,15 @@ def cv_plot(cv_range, mean_error, std_error, hyper_param, log):
 
 
 def min_df_cv(min_df_val):
-    return TfidfVectorizer(stop_words=nltk.corpus.stopwords.words('english'), min_df=min_df_val, max_df=100)
+    return TfidfVectorizer(stop_words=nltk.corpus.stopwords.words('english'), min_df=min_df_val)
 
 
 def max_df_cv(max_df_val):
-    return TfidfVectorizer(stop_words=nltk.corpus.stopwords.words('english'), min_df=0.1, max_df=max_df_val)
+    return TfidfVectorizer(stop_words=nltk.corpus.stopwords.words('english'), min_df=20, max_df=max_df_val)
 
 
 def ngram_cv(ngram_val):
-    return TfidfVectorizer(stop_words=nltk.corpus.stopwords.words('english'), min_df=0.1, max_df=100,
+    return TfidfVectorizer(stop_words=nltk.corpus.stopwords.words('english'), min_df=20, max_df=300,
                            ngram_range=(1, ngram_val))
 
 
@@ -47,11 +76,14 @@ def vectoriser_cv(hyper_param, text, cv_range, votes):
 
     for i in cv_range:
         vectoriser = get_vectoriser(i)
+
         X = vectoriser.fit_transform(text)
-        X = pd.concat([pd.DataFrame(X.toarray()), votes], axis=1)
+        #X = pd.concat([pd.DataFrame(), votes], axis=1)
+        #X = pd.concat([pd.DataFrame(X.toarray()), votes], axis=1)
+
         scale = StandardScaler(with_mean=False)
         scale.fit_transform(X)
-        model = LinearSVC()
+        model = SVC(C=1)
         # conduct cross validation
         scores = cross_val_score(model, X, y, cv=5, scoring='f1_macro')
         # record results
@@ -59,31 +91,26 @@ def vectoriser_cv(hyper_param, text, cv_range, votes):
         std_error.append(np.array(scores).std())
     cv_plot(cv_range, mean_error, std_error, hyper_param, False)
 
-    print(cv_range)
-    print(mean_error)
-    print(std_error)
 
-
-
-def penalty_cv(text):
-    vectorizer = TfidfVectorizer(stop_words=nltk.corpus.stopwords.words('english'), min_df=0.01, max_df=100,
+def penalty_cv(text, votes):
+    vectoriser = TfidfVectorizer(stop_words=nltk.corpus.stopwords.words('english'), min_df=20, max_df=300,
                                  ngram_range=(1, 2))
-    X = vectorizer.fit_transform(text)
-    c_range = [0.00000000001, 0.0000000001, 0.000000001, 0.00000001, 0.0000001, 0.000001, 0.00001, 0.0001, 0.001, 0.01, 0.1, 1, 10, 100, 1000, 10000, 100000, 1000000, 10000000, 100000000, 1000000000, 10000000000, 100000000000, 1000000000000, 10000000000000, 100000000000000]
+    X = vectoriser.fit_transform(text)
+    #X = pd.concat([pd.DataFrame(), votes], axis=1)
+    #X = pd.concat([pd.DataFrame(X.toarray()), votes], axis=1)
+    c_range = [ 0.00000001, 0.0000001, 0.000001, 0.00001, 0.0001, 0.001, 0.01,
+               0.1, 1, 10, 100, 1000, 10000, 100000, 1000000, 10000000, 100000000, 1000000000, 10000000000,
+               100000000000]
     mean_error = []
     std_error = []
 
     for c in c_range:
-        model = LinearSVC(C=c)
+        model = SVC(C=10)
         scores = cross_val_score(model, X, y, cv=5, scoring='f1_weighted')
         mean_error.append(np.array(scores).mean())
         std_error.append(np.array(scores).std())
 
-    cv_plot(c_range, mean_error, std_error, 'k', True)
-
-    print(c_range)
-    print(mean_error)
-    print(std_error)
+    cv_plot(c_range, mean_error, std_error, 'penalty C', True)
 
 
 df = pd.read_csv("dataset.tsv", sep="\t")
@@ -91,31 +118,43 @@ text = df.content.astype("U")
 others = df.iloc[:, 2:22]
 y = df.rating
 
-vectoriser_cv('min df', text, [0.0001, 0.001, 0.01, 0.1, 1], others)
-vectoriser_cv('max df', text, [50, 100, 500, 1000], others)
-vectoriser_cv('ngram', text, [1, 2, 3, 4, 5, 6, 7, 8, 9], others)
-penalty_cv(text)
+print(y)
+
+#vectoriser_cv('min df', text, [1, 5, 10, 20, 30, 40, 50], others)
+#vectoriser_cv('max df', text, [50, 100, 200, 300, 400, 500, 1000, 1500, 2000], others)
+#vectoriser_cv('ngram', text, [1, 2, 3, 4, 5, 6, 7, 8, 9], others)
+#penalty_cv(text, others)
+
+combined_vectoriser = TfidfVectorizer(stop_words=nltk.corpus.stopwords.words('english'), min_df=40, max_df=300,
+                             ngram_range=(1, 1))
+
+combined_X = combined_vectoriser.fit_transform(text)
+combined_X = pd.concat([pd.DataFrame(combined_X.toarray()), others], axis=1)
+text_vectoriser = TfidfVectorizer(stop_words=nltk.corpus.stopwords.words('english'), min_df=20, max_df=300,
+                                 ngram_range=(1, 2))
 
 
-vectoriser = TfidfVectorizer(stop_words=nltk.corpus.stopwords.words('english'), min_df=0.1, max_df=100,
-                             ngram_range=(1, 2))
+text_X = text_vectoriser.fit_transform(text)
+
+combined_SVM_model = SVC(C=10, probability=True)
+text_SVM_model = SVC(C=10, probability=True)
+votes_SVM_model = SVC(C=1, probability=True)
+dummy = DummyClassifier(strategy='most_frequent')
+multiclass_roc_curves(combined_X, y, combined_SVM_model)
+combined_fpr, combined_tpr, combined_auc = multiclass_roc_curves(combined_X, y, combined_SVM_model)
+text_fpr, text_tpr, text_auc = multiclass_roc_curves(text_X, y, text_SVM_model)
+votes_fpr, votes_tpr, votes_auc = multiclass_roc_curves(others, y, votes_SVM_model)
+dummy_fpr, dummy_tpr, dummy_auc = multiclass_roc_curves(combined_X, y, dummy)
 
 
-X = vectoriser.fit_transform(text)
-X = pd.concat([pd.DataFrame(X.toarray()), others], axis=1)
-scale = StandardScaler(with_mean=False)
-scale.fit_transform(X)
-xtrain, xtest, ytrain, ytest = train_test_split(X, y, test_size=0.2)
-
-
-svm_model = LinearSVC(C=1)
-svm_model.fit(xtrain, ytrain)
-predictions = svm_model.predict(xtest)
-print(classification_report(ytest, predictions))
-print(confusion_matrix(ytest, predictions))
-
-dummy = DummyClassifier(strategy='uniform')
-dummy.fit(xtrain, ytrain)
-predictions = dummy.predict(xtest)
-print(classification_report(ytest, predictions))
-print(confusion_matrix(ytest, predictions))
+plt.plot(combined_fpr, combined_tpr, label="Combine text and vote features. AUC = " + str(round(combined_auc, 2)), color="navy")
+plt.plot(text_fpr, text_tpr, label="Just text features. AUC = " + str(round(text_auc, 2)), color="yellow")
+plt.plot(votes_fpr, votes_tpr, label="Just vote features. AUC = " + str(round(votes_auc, 2)), color="green")
+plt.plot(dummy_fpr, dummy_tpr, label="Baseline classifier. AUC = " + str(round(dummy_auc, 2)), color="red")
+plt.xlim([0.0, 1.0])
+plt.ylim([0.0, 1.05])
+plt.xlabel("False Positive Rate")
+plt.ylabel("True Positive Rate")
+plt.title("Macro ROC of feature types")
+plt.legend(loc="lower right")
+plt.show()
